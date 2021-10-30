@@ -22,7 +22,7 @@ for num_c, rows in enumerate(gray_mask):
 
 another = cv2.bitwise_and(gray_image.copy(), gray_mask)
 
-# cv2.imwrite(path + "and.png", another)
+cv2.imwrite(path + "mask_and_depth.png", another)
 
 # clustering = DBSCAN(min_samples = 3, n_jobs=12)
 km = KMeans(n_clusters=3)
@@ -38,16 +38,24 @@ labels = km.fit_predict(X)
 
 
 uniq = {}
-for a in labels:
+depth_p = {}
+for pos, a in enumerate(labels):
     if not (a in uniq):
         uniq[a] = 0
+        depth_p[a] = X[pos][0]
     else:
         uniq[a] +=1
-print(uniq)
-maxk1 = max(uniq, key=uniq.get)
-uniq[maxk1] = 0
-maxk2 = max(uniq, key=uniq.get) 
 
+
+print(uniq)
+print(depth_p)
+maxk1 = min(depth_p, key=depth_p.get)
+print("maxk1 ", maxk1)
+
+depth_p[maxk1] = 255
+
+maxk2 = min(depth_p, key=depth_p.get) 
+print("maxk2 ", maxk2)
 for num_c, rows in enumerate(another):
     for num_r, col in enumerate(rows):
         if (labels[num_c * 1920 + num_r]  == maxk2):
