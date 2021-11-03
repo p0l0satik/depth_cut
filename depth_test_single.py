@@ -1,6 +1,6 @@
 import numpy as np
 import cv2
-# from sklearn.cluster import DBSCAN
+from sklearn.cluster import DBSCAN
 from sklearn.cluster import AgglomerativeClustering
 import numpy as np
 import open3d as o3d
@@ -9,6 +9,9 @@ import imageio
 import sys
 import os
 import tqdm
+import collections
+import matplotlib.pylab as plt 
+
 
 # Point cloud from depth (by Konstantin)
 def pointcloudify_depth(depth, intrinsics, dist_coeff=[], undistort=True):
@@ -63,19 +66,45 @@ def project_pcd_to_depth(pcd, undist_intrinsics, img_size):
 
 if __name__ == "__main__":
     path = sys.argv[1]
-    with open(os.path.join(path, "association.txt")) as asoc:
+    with open(os.path.join(path, "annotation.txt")) as asoc:
         lines = asoc.readlines()
-        for line in tqdm.tqdm(lines):
+        for line in lines:
             s = line.strip().split(" ")
-            mask = imageio.imread(os.path.join(path, "mask", s[1][4:]))
-            depth = imageio.imread(os.path.join(path, s[3]))
-            gray_mask = cv2.cvtColor(mask, cv2.COLOR_RGB2GRAY)
+            mask = imageio.imread(os.path.join(path, s[0]))
+            depth = imageio.imread(os.path.join(path, s[1]))
+            depth2 = cv2.imread(os.path.join(path, s[1]))
 
+            gray_mask = cv2.cvtColor(mask, cv2.COLOR_RGB2GRAY)
+            depth_gray = cv2.cvtColor(depth2, cv2.COLOR_RGB2GRAY)
+            only_mask = cv2.bitwise_and(depth_gray.copy(), gray_mask)
             
+            depth_dist = {}
+            for num_c, col in enumerate(only_mask):
+                for num_r, val in enumerate(col):
+                    if not (val in depth_dist):
+                        depth_dist[val] = 1
+                    else:
+                        depth_dist[val] += 1
+            
+            # plt.plot(depth_dist)
+            del depth_dist[0]
+            lists = sorted(depth_dist.items()) # sorted by key, return a list of tuples
+
+            x, y = zip(*lists) # unpack a list of pairs into two tuples
+            plt.figure()
+            plt.scatter(x, y)
+            # plt.show()
+            plt.savefig(os.path.join(path, s[1][:6], "dist"))
+            # for k in sorted(depth_dist.items()):
+            #     print(k)
+            # print()
+            # print()
+            # print()
+            # print()
 
             with open('bandeja_standard.pickle', 'rb') as config:
                 config_dict = pickle.load(config)
-            
+
 
             pcd = o3d.geometry.PointCloud()
             rgb_cnf = np.load('s10_standard_intrinsics(1).npy', allow_pickle=True).item()
@@ -98,14 +127,14 @@ if __name__ == "__main__":
             f = o3d.geometry.PointCloud()
             f.points = o3d.utility.Vector3dVector(filtered)
 
-            # clustering = DBSCAN(eps = 50)
-            clustering = AgglomerativeClustering(n_clusters =None, distance_threshold = 5000)
+            clustering = DBSCAN(eps = 50)
+            # clustering = AgglomerativeClustering(n_clusters =None, distance_threshold = 5000)
             labels = clustering.fit_predict(filtered)
             uniq = {}
             depth_p = {}
             for pos, a in enumerate(labels):
                 if not (a in uniq):
-                    uniq[a] = 1
+                    uniq[a] = 0
                     depth_p[a] = filtered[pos][2]
                 else:
                     uniq[a] +=1
@@ -134,6 +163,6 @@ if __name__ == "__main__":
                     if (aligned_depth[num_c][num_r] > 0):
                         aligned_depth[num_c][num_r] = 255
 
-            imageio.imwrite(os.path.join(path, "mask_cut", s[1][4:]), (aligned_depth).astype(np.uint16))
+            imageio.imwrite(os.path.join(path, s[2]), (aligned_depth).astype(np.uint16))
 
 
