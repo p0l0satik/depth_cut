@@ -143,16 +143,11 @@ def back_to_png(ready, rgb_cnf, shp):
     aligned_depth = project_pcd_to_depth(r, rgb_cnf['undist_intrinsics'], shp)
     return aligned_depth
 
-def upd_mask(aligned_depth):
-    for num_c, rows in enumerate(aligned_depth):
-        for num_r, col in enumerate(rows):
-            if (aligned_depth[num_c][num_r] > 0):
-                aligned_depth[num_c][num_r] = 255
 
 def main():
     path = sys.argv[1]
     # s = line.strip()
-    s = "test8"
+    s = "test4"
 
     rgb_cnf = np.load('s10_standard_intrinsics(1).npy', allow_pickle=True).item()
     mask = imageio.imread(os.path.join(path, s, "mask.png"))
@@ -166,7 +161,7 @@ def main():
 
     filtered = filtered[~np.all(filtered == 0, axis=1)]
 
-    clustering = DBSCAN(eps = 0.5)
+    clustering = DBSCAN(eps = 0.5, n_jobs=-1)
     # clustering = AgglomerativeClustering(n_clusters =None, distance_threshold = 50)
     labels = clustering.fit_predict(filtered)
 
@@ -183,7 +178,7 @@ def main():
     aligned_depth = back_to_png(ready, rgb_cnf, depth.shape[:2]) 
     aligned_depth = smooth_depth(aligned_depth)
 
-    upd_mask(aligned_depth)
+    aligned_depth = (aligned_depth > 0) * 255 
 
     imageio.imwrite(os.path.join(path, s, "res.png"), (aligned_depth).astype(np.uint16))
 
