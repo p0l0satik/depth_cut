@@ -67,14 +67,13 @@ def project_pcd_to_depth(pcd, undist_intrinsics, img_size):
 
 def smooth_depth(depth):
     MAX_DEPTH_VAL = 1e6
-    KERNEL_SIZE = 3
+    KERNEL_SIZE = 11
     depth[depth == 0] = MAX_DEPTH_VAL
     smoothed_depth = scipy.ndimage.minimum_filter(depth, KERNEL_SIZE)
     smoothed_depth[smoothed_depth == MAX_DEPTH_VAL] = 0
     return smoothed_depth
 
 def initial_filter(gray_mask, depth):
-    print(type(gray_mask))
     mask_arr = np.array(gray_mask).reshape(1920*1080, 1)
     depth_arr = np.array(depth).reshape(1920*1080, 1)
     depth_filtered_arr = np.fromiter((d  if mask_arr[num] > 0 else 0 for num, d in enumerate(depth_arr)), dtype=depth_arr.dtype)
@@ -92,17 +91,14 @@ def convert_from_depth(depth_arr, rgb_cnf, shp):
     pcd.transform(T)
     # o3d.visualization.draw_geometries([pcd])
     # Project aligned point cloud to rgb
+    #?
     aligned_depth = project_pcd_to_depth(pcd, rgb_cnf['undist_intrinsics'], shp)
-    # print(aligned_depth.shape)
-    # return aligned_depth
     return aligned_depth
     
 
 def convert_pcd(depth, rgb_cnf):
     pcd = o3d.geometry.PointCloud()
-    print(depth.shape)
     pcd.points = o3d.utility.Vector3dVector(pointcloudify_depth(depth, rgb_cnf['undist_intrinsics'], undistort=False)) # H * W X 3
-    print(np.asarray(pcd.points).shape)
     return pcd
 
 def filter_pcd(pcd):
@@ -112,7 +108,6 @@ def filter_pcd(pcd):
 def filter_pcd_points(pcd, pcd_mask):
     cld = np.asarray(pcd.points)
     cld_mask = np.asarray(pcd_mask.points)
-    print(cld.shape, cld_mask.shape)
 
     return [(p) for num, p in enumerate(cld) if cld_mask[num][2] > 0 and (p[0] > 0  or p[1] > 0 or p[2] > 0)]
 
@@ -157,7 +152,7 @@ def upd_mask(aligned_depth):
 def main():
     path = sys.argv[1]
     # s = line.strip()
-    s = "test3"
+    s = "test8"
 
     rgb_cnf = np.load('s10_standard_intrinsics(1).npy', allow_pickle=True).item()
     mask = imageio.imread(os.path.join(path, s, "mask.png"))
@@ -165,23 +160,33 @@ def main():
     depth_array = np.load(os.path.join(path, s, "pc.npy"), allow_pickle=True)
     gray_mask = cv2.cvtColor(mask, cv2.COLOR_RGB2GRAY)
 
-    depth_sparce = convert_from_depth(depth_array, rgb_cnf, depth.shape[:2])
+    # #NEW
+    
+    depth_sparce = convert_from_depth(depth_array, rgb_cnf, mask.shape[:2])
 
-    # depth = initial_filter(gray_mask, depth)
-    pcd = convert_pcd(depth_sparce, rgb_cnf)
-    # pcd = convert_from_depth(depth_array, rgb_cnf, depth.shape[:2])
+    filtered = np.asarray(convert_pcd(depth_sparce * (gray_mask > 0), rgb_cnf).points)
 
-    pcd_mask = convert_pcd(gray_mask, rgb_cnf)
-    filtered = filter_pcd_points(pcd, pcd_mask)
+    filtered = filtered[~np.all(filtered == 0, axis=1)]
+    # #/NEW
 
-    # filtered = filter_pcd(pcd)
+    # OLD
+    # depth_sparce = convert_from_depth(depth_array, rgb_cnf, depth.shape[:2])
+    # pcd = convert_pcd(depth_sparce, rgb_cnf)
+    # pcd_mask = convert_pcd(gray_mask, rgb_cnf)
+    # filtered = filter_pcd_points(pcd, pcd_mask)
+    # /OLD
 
-    clustering = DBSCAN(eps = 50)
-    # clustering = AgglomerativeClustering(n_clusters =None, distance_threshold = 15000)
+    # r = o3d.geometry.PointCloud()
+    # r.points = o3d.utility.Vector3dVector(filtered)
+    # o3d.visualization.draw_geometries([r])
+
+    clustering = DBSCAN(eps = 1)
+    # clustering = AgglomerativeClustering(n_clusters =None, distance_threshold = 50)
     labels = clustering.fit_predict(filtered)
 
+
     uniq, depth_p = count_labels(filtered, labels)
-    
+    print(uniq)
 
     filtered_depth_p = filter_small_clusters(uniq, depth_p)
 
@@ -190,7 +195,7 @@ def main():
     ready = choose_mask_points(labels, filtered, mink)
 
     aligned_depth = back_to_png(ready, rgb_cnf, depth.shape[:2]) 
-    # aligned_depth = smooth_depth(aligned_depth)
+    aligned_depth = smooth_depth(aligned_depth)
 
     upd_mask(aligned_depth)
 
