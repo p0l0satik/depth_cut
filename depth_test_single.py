@@ -159,28 +159,14 @@ def main():
     depth = imageio.imread(os.path.join(path, s, "depth.png"))
     depth_array = np.load(os.path.join(path, s, "pc.npy"), allow_pickle=True)
     gray_mask = cv2.cvtColor(mask, cv2.COLOR_RGB2GRAY)
-
-    # #NEW
     
     depth_sparce = convert_from_depth(depth_array, rgb_cnf, mask.shape[:2])
 
     filtered = np.asarray(convert_pcd(depth_sparce * (gray_mask > 0), rgb_cnf).points)
 
     filtered = filtered[~np.all(filtered == 0, axis=1)]
-    # #/NEW
 
-    # OLD
-    # depth_sparce = convert_from_depth(depth_array, rgb_cnf, depth.shape[:2])
-    # pcd = convert_pcd(depth_sparce, rgb_cnf)
-    # pcd_mask = convert_pcd(gray_mask, rgb_cnf)
-    # filtered = filter_pcd_points(pcd, pcd_mask)
-    # /OLD
-
-    # r = o3d.geometry.PointCloud()
-    # r.points = o3d.utility.Vector3dVector(filtered)
-    # o3d.visualization.draw_geometries([r])
-
-    clustering = DBSCAN(eps = 1)
+    clustering = DBSCAN(eps = 0.5)
     # clustering = AgglomerativeClustering(n_clusters =None, distance_threshold = 50)
     labels = clustering.fit_predict(filtered)
 
